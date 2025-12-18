@@ -130,11 +130,11 @@ public class Main {
         System.out.print("Ingrese stock disponible: ");
         int stockDisponible = scanner.nextInt();
         scanner.nextLine();
-        String resultadoStock = flujo.validarStock(cantidadSolicitada, stockDisponible);
+        String resultadoStock = flujo.validarCantidad(cantidadSolicitada, stockDisponible);
         System.out.println("Resultado: " + formatearJSON(resultadoStock));
         
         System.out.println("\n=== PRUEBA 3: Simulación de servicio (Excepción Técnica) ===");
-        String resultadoTecnico = flujo.simularServicioConReintento("SERVICIO_PRUEBA", "datos_test");
+        String resultadoTecnico = flujo.invocarServicioConReintentos("SERVICIO.PRUEBA.REQUEST", "SERVICIO.PRUEBA.RESPONSE", "datos_test");
         System.out.println("Resultado: " + formatearJSON(resultadoTecnico));
         
         flujo.cerrar();
