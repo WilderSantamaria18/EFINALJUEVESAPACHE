@@ -34,7 +34,7 @@ echo   6. Empleado Service   - Comisiones, metas, bonificaciones
 echo   7. TODOS (modo JMS)   - Iniciar todos los servicios
 echo   0. Salir
 echo ================================================================
-echo ╚════════════════════════════════════════════════════════════════╝
+
 echo.
 set /p opcion="Seleccione opcion: "
 
