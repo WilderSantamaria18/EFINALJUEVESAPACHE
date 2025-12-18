@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:jms="http://www.mulesoft.org/schema/mule/jms"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd">
+	
+	<!-- HTTP Listener Configuration -->
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config">
+		<http:listener-connection host="0.0.0.0" port="8092" />
+	</http:listener-config>
+	
+	<!-- HTTP Request Configuration -->
+	<http:request-config name="HTTP_Request_config" doc:name="HTTP Request configuration">
+		<http:request-connection host="localhost" port="8081" />
+	</http:request-config>
+	
+	<!-- ActiveMQ JMS Configuration -->
+	<jms:config name="JMS_Config" doc:name="JMS Config">
+		<jms:active-mq-connection>
+			<jms:factory-configuration brokerUrl="tcp://localhost:61616" />
+		</jms:active-mq-connection>
+	</jms:config>
+	
+	<!-- FLUJO 1: Validación con manejo de excepciones -->
+	<flow name="excepcion-flow">
+		<!-- 1. Entrada HTTP -->
+		<http:listener doc:name="POST /procesar-con-validacion" config-ref="HTTP_Listener_config" path="/procesar-con-validacion" allowedMethods="POST"/>
+		
+		<!-- 2. Guardar datos -->
+		<ee:transform doc:name="Guardar datos">
+			<ee:variables>
+				<ee:set-variable variableName="dni"><![CDATA[%dw 2.0
+output application/java
+---
+payload.dni]]></ee:set-variable>
+				<ee:set-variable variableName="codigoProducto"><![CDATA[%dw 2.0
+output application/java
+---
+payload.codigoProducto]]></ee:set-variable>
+				<ee:set-variable variableName="cantidad"><![CDATA[%dw 2.0
+output application/java
+---
+payload.cantidad]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		
+		<!-- 3. Validaciones de negocio -->
+		<choice doc:name="Validar reglas de negocio">
+			<!-- Validación 1: DNI inválido -->
+			<when expression="#[vars.dni == null or sizeOf(vars.dni) != 8]">
+				<ee:transform doc:name="Error DNI">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	tipoError: "NEGOCIO",
+	codigo: "ERR_DNI_001",
+	mensaje: "DNI inválido: debe tener exactamente 8 dígitos",
+	dni: vars.dni,
+	timestamp: now()
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				
+				<!-- Enviar a cola de errores de negocio -->
+				<jms:publish doc:name="Enviar a ERROR.QUEUE" config-ref="JMS_Config" destination="ERROR.QUEUE"/>
+				
+				<ee:transform doc:name="Respuesta error">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	exito: false,
+	error: "DNI_INVALIDO",
+	mensaje: "El DNI debe tener 8 dígitos"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			
+			<!-- Validación 2: Cantidad inválida -->
+			<when expression="#[vars.cantidad == null or vars.cantidad &lt;= 0]">
+				<ee:transform doc:name="Error Cantidad">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	tipoError: "NEGOCIO",
+	codigo: "ERR_CANTIDAD_001",
+	mensaje: "Cantidad inválida: debe ser mayor a 0",
+	cantidad: vars.cantidad,
+	timestamp: now()
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				
+				<jms:publish doc:name="Enviar a ERROR.QUEUE" config-ref="JMS_Config" destination="ERROR.QUEUE"/>
+				
+				<ee:transform doc:name="Respuesta error">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	exito: false,
+	error: "CANTIDAD_INVALIDA",
+	mensaje: "La cantidad debe ser mayor a 0"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			
+			<!-- Validación OK: Procesar -->
+			<otherwise>
+				<try doc:name="Intentar llamar servicio">
+					<!-- Llamar a RENIEC con reintentos -->
+					<http:request method="POST" doc:name="Validar RENIEC (con reintentos)" config-ref="HTTP_Request_config" path="/reniec/validar">
+						<http:body><![CDATA[#[output application/json --- {"dni": vars.dni}]]]></http:body>
+						<reconnect count="3" frequency="2000"/>
+					</http:request>
+					
+					<ee:transform doc:name="Respuesta exitosa">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	exito: true,
+	mensaje: "Procesamiento completado exitosamente",
+	resultado: payload
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					
+					<!-- Manejo de errores técnicos -->
+					<error-handler>
+						<on-error-propagate enableNotifications="true" logException="true" doc:name="Error técnico" type="HTTP:TIMEOUT, HTTP:CONNECTIVITY, HTTP:SERVICE_UNAVAILABLE">
+							<ee:transform doc:name="Error técnico">
+								<ee:message>
+									<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	tipoError: "TECNICO",
+	codigo: "ERR_TIMEOUT",
+	mensaje: "Servicio no disponible después de 3 intentos",
+	intentos: 3,
+	servicio: "RENIEC",
+	timestamp: now(),
+	errorDetalle: error.description
+}]]></ee:set-payload>
+								</ee:message>
+							</ee:transform>
+							
+							<!-- Enviar a cola de dead letter -->
+							<jms:publish doc:name="Enviar a DEADLETTER.QUEUE" config-ref="JMS_Config" destination="DEADLETTER.QUEUE"/>
+							
+							<ee:transform doc:name="Respuesta error">
+								<ee:message>
+									<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	exito: false,
+	error: "SERVICIO_NO_DISPONIBLE",
+	mensaje: "El servicio RENIEC no está disponible. Se intentó 3 veces."
+}]]></ee:set-payload>
+								</ee:message>
+							</ee:transform>
+						</on-error-propagate>
+					</error-handler>
+				</try>
+			</otherwise>
+		</choice>
+	</flow>
+	
+	<!-- FLUJO 2: Consumer de ERROR.QUEUE (monitoreo) -->
+	<flow name="error-queue-consumer">
+		<jms:listener doc:name="Escuchar ERROR.QUEUE" config-ref="JMS_Config" destination="ERROR.QUEUE"/>
+		
+		<logger level="ERROR" doc:name="Log error negocio" message="#['[ERROR NEGOCIO] ' ++ payload.codigo ++ ': ' ++ payload.mensaje]"/>
+		
+		<!-- Aquí podrías guardar en BD, enviar email, etc. -->
+	</flow>
+	
+	<!-- FLUJO 3: Consumer de DEADLETTER.QUEUE (monitoreo) -->
+	<flow name="deadletter-queue-consumer">
+		<jms:listener doc:name="Escuchar DEADLETTER.QUEUE" config-ref="JMS_Config" destination="DEADLETTER.QUEUE"/>
+		
+		<logger level="FATAL" doc:name="Log error técnico" message="#['[ERROR TECNICO] ' ++ payload.codigo ++ ': ' ++ payload.mensaje ++ ' - Intentos: ' ++ payload.intentos]"/>
+		
+		<!-- Aquí podrías enviar alertas críticas, crear ticket, etc. -->
+	</flow>
+</mule>

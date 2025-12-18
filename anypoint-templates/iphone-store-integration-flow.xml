@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	
+	<!-- HTTP Listener Configuration -->
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config">
+		<http:listener-connection host="0.0.0.0" port="8091" />
+	</http:listener-config>
+	
+	<!-- HTTP Request Configuration para servicios -->
+	<http:request-config name="HTTP_Request_Services" doc:name="HTTP Request configuration">
+		<http:request-connection host="localhost" port="8081" />
+	</http:request-config>
+	
+	<!-- FLUJO PRINCIPAL: Venta Completa -->
+	<flow name="venta-completa-flow">
+		<!-- 1. Entrada HTTP -->
+		<http:listener doc:name="POST /venta-completa" config-ref="HTTP_Listener_config" path="/venta-completa" allowedMethods="POST"/>
+		
+		<!-- 2. Guardar datos de entrada en variables -->
+		<ee:transform doc:name="Parsear entrada">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="dniCliente"><![CDATA[%dw 2.0
+output application/java
+---
+payload.dniCliente]]></ee:set-variable>
+				<ee:set-variable variableName="codigoProducto"><![CDATA[%dw 2.0
+output application/java
+---
+payload.codigoProducto]]></ee:set-variable>
+				<ee:set-variable variableName="cantidad"><![CDATA[%dw 2.0
+output application/java
+---
+payload.cantidad]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		
+		<!-- 3. Validar cliente con RENIEC -->
+		<http:request method="POST" doc:name="Validar RENIEC" config-ref="HTTP_Request_Services" path="/reniec/validar">
+			<http:body><![CDATA[#[output application/json --- {"dni": vars.dniCliente}]]]></http:body>
+		</http:request>
+		
+		<ee:transform doc:name="Guardar resultado RENIEC">
+			<ee:variables>
+				<ee:set-variable variableName="clienteValido"><![CDATA[%dw 2.0
+output application/java
+---
+payload.exito]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		
+		<!-- 4. Decision: ¿Cliente válido? -->
+		<choice doc:name="¿Cliente válido?">
+			<when expression="#[vars.clienteValido == true]">
+				<!-- 5. Consultar producto -->
+				<http:request method="POST" doc:name="Consultar Producto" config-ref="HTTP_Request_Services" path="/producto/consultar" port="8082">
+					<http:body><![CDATA[#[output application/json --- {"codigo": vars.codigoProducto}]]]></http:body>
+				</http:request>
+				
+				<ee:transform doc:name="Guardar precio">
+					<ee:variables>
+						<ee:set-variable variableName="precio"><![CDATA[%dw 2.0
+output application/java
+---
+payload.precio]]></ee:set-variable>
+						<ee:set-variable variableName="nombreProducto"><![CDATA[%dw 2.0
+output application/java
+---
+payload.nombre]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				
+				<!-- 6. Verificar inventario -->
+				<http:request method="POST" doc:name="Verificar Inventario" config-ref="HTTP_Request_Services" path="/inventario/verificar" port="8083">
+					<http:body><![CDATA[#[output application/json --- {"codigoProducto": vars.codigoProducto, "cantidad": vars.cantidad}]]]></http:body>
+				</http:request>
+				
+				<ee:transform doc:name="Guardar disponibilidad">
+					<ee:variables>
+						<ee:set-variable variableName="stockDisponible"><![CDATA[%dw 2.0
+output application/java
+---
+payload.disponible]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				
+				<!-- 7. Decision: ¿Stock disponible? -->
+				<choice doc:name="¿Stock disponible?">
+					<when expression="#[vars.stockDisponible == true]">
+						<!-- 8. Calcular totales -->
+						<ee:transform doc:name="Calcular totales">
+							<ee:variables>
+								<ee:set-variable variableName="subtotal"><![CDATA[%dw 2.0
+output application/java
+---
+vars.precio * vars.cantidad]]></ee:set-variable>
+								<ee:set-variable variableName="igv"><![CDATA[%dw 2.0
+output application/java
+---
+(vars.precio * vars.cantidad) * 0.18]]></ee:set-variable>
+								<ee:set-variable variableName="total"><![CDATA[%dw 2.0
+output application/java
+---
+(vars.precio * vars.cantidad) * 1.18]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						
+						<!-- 9. Registrar venta -->
+						<http:request method="POST" doc:name="Registrar Venta" config-ref="HTTP_Request_Services" path="/venta/registrar" port="8084">
+							<http:body><![CDATA[#[output application/json --- {
+								"dniCliente": vars.dniCliente,
+								"codigoProducto": vars.codigoProducto,
+								"cantidad": vars.cantidad,
+								"subtotal": vars.subtotal,
+								"igv": vars.igv,
+								"total": vars.total
+							}]]]></http:body>
+						</http:request>
+						
+						<ee:transform doc:name="Guardar ID venta">
+							<ee:variables>
+								<ee:set-variable variableName="ventaId"><![CDATA[%dw 2.0
+output application/java
+---
+payload.id]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						
+						<!-- 10. Actualizar inventario -->
+						<http:request method="POST" doc:name="Actualizar Inventario" config-ref="HTTP_Request_Services" path="/inventario/actualizar" port="8083">
+							<http:body><![CDATA[#[output application/json --- {
+								"codigoProducto": vars.codigoProducto,
+								"cantidad": vars.cantidad
+							}]]]></http:body>
+						</http:request>
+						
+						<!-- 11. Registrar empleado (comisión) -->
+						<http:request method="POST" doc:name="Registrar Comision" config-ref="HTTP_Request_Services" path="/empleado/comision" port="8085">
+							<http:body><![CDATA[#[output application/json --- {
+								"ventaId": vars.ventaId,
+								"monto": vars.total * 0.05
+							}]]]></http:body>
+						</http:request>
+						
+						<!-- 12. Respuesta exitosa -->
+						<ee:transform doc:name="Respuesta exitosa">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	exito: true,
+	mensaje: "Venta procesada exitosamente",
+	datos: {
+		ventaId: vars.ventaId,
+		cliente: vars.dniCliente,
+		producto: vars.nombreProducto,
+		cantidad: vars.cantidad,
+		subtotal: vars.subtotal,
+		igv: vars.igv,
+		total: vars.total
+	}
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</when>
+					<otherwise>
+						<!-- Stock no disponible -->
+						<ee:transform doc:name="Error: sin stock">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	exito: false,
+	error: "STOCK_INSUFICIENTE",
+	mensaje: "No hay stock suficiente para el producto " ++ vars.codigoProducto
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise>
+				<!-- Cliente no válido -->
+				<ee:transform doc:name="Error: cliente inválido">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	exito: false,
+	error: "CLIENTE_INVALIDO",
+	mensaje: "El DNI no es válido o no está registrado"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		
+		<!-- Error Handler Global -->
+		<error-handler>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+				<ee:transform doc:name="Error genérico">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	exito: false,
+	error: "ERROR_INTERNO",
+	mensaje: "Ocurrió un error al procesar la venta: " ++ error.description
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>
