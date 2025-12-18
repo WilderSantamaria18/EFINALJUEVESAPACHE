@@ -11,6 +11,7 @@ import org.apache.activemq.ActiveMQConnectionFactory;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.Scanner;
 
 public class RucService {
     private static final String BROKER_URL = "tcp://localhost:61616";
@@ -159,6 +160,147 @@ public class RucService {
     }
 
     public static void main(String[] args) {
-        new RucService().start();
+        RucService service = new RucService();
+        boolean modoInteractivo = args.length > 0 && args[0].equals("--interactive");
+        
+        if (modoInteractivo) {
+            Scanner scanner = null;
+            try {
+                scanner = new Scanner(System.in);
+                
+                while (true) {
+                    System.out.println("\n--- SERVICIO RUC - LOGICA DE NEGOCIO ---");
+                    System.out.println("1. Consultar RUC (validaciones + tipo contribuyente)");
+                    System.out.println("2. Validar digito verificador RUC");
+                    System.out.println("3. Determinar regimen tributario");
+                    System.out.println("4. Calcular nivel de riesgo empresa");
+                    System.out.println("5. Verificar si puede facturar");
+                    System.out.println("0. Salir");
+                    System.out.print("Opcion: ");
+                    
+                    if (!scanner.hasNextInt()) {
+                        System.out.println("Error: Ingrese un numero");
+                        scanner.nextLine();
+                        continue;
+                    }
+                    
+                    int opcion = scanner.nextInt();
+                    scanner.nextLine();
+                    
+                    switch (opcion) {
+                        case 1:
+                            System.out.print("\nIngrese RUC (11 digitos): ");
+                            String ruc = scanner.nextLine();
+                            String resultado = service.procesarConsultaRUC(ruc);
+                            System.out.println("\nResultado:");
+                            System.out.println(formatearJSON(resultado));
+                            break;
+                            
+                        case 2:
+                            System.out.print("\nIngrese RUC para validar: ");
+                            String rucValidar = scanner.nextLine();
+                            boolean valido = service.validarDigitoVerificador(rucValidar);
+                            System.out.println("Digito verificador: " + (valido ? "VALIDO" : "INVALIDO"));
+                            break;
+                            
+                        case 3:
+                            System.out.print("\nIngrese RUC: ");
+                            String rucRegimen = scanner.nextLine();
+                            String tipo = service.determinarTipoContribuyente(rucRegimen);
+                            String regimen = service.determinarRegimenTributario(rucRegimen);
+                            System.out.println("Tipo contribuyente: " + tipo);
+                            System.out.println("Regimen tributario sugerido: " + regimen);
+                            break;
+                            
+                        case 4:
+                            System.out.print("\nIngrese RUC: ");
+                            String rucRiesgo = scanner.nextLine();
+                            Empresa emp = service.consultarRUC(rucRiesgo);
+                            if (emp != null) {
+                                String riesgo = service.calcularNivelRiesgo(emp);
+                                System.out.println("Razon Social: " + emp.getRazonSocial());
+                                System.out.println("Estado: " + emp.getEstado());
+                                System.out.println("Nivel de Riesgo: " + riesgo);
+                            } else {
+                                System.out.println("RUC no encontrado");
+                            }
+                            break;
+                            
+                        case 5:
+                            System.out.print("\nIngrese RUC: ");
+                            String rucFacturar = scanner.nextLine();
+                            Empresa empresa = service.consultarRUC(rucFacturar);
+                            if (empresa != null) {
+                                boolean puede = service.puedeFacturar(empresa);
+                                System.out.println("Razon Social: " + empresa.getRazonSocial());
+                                System.out.println("Estado: " + empresa.getEstado());
+                                System.out.println("Puede Facturar: " + (puede ? "SI" : "NO"));
+                                if (!puede) {
+                                    System.out.println("Motivo: " + service.obtenerMotivoNoFactura(empresa));
+                                }
+                            } else {
+                                System.out.println("RUC no encontrado");
+                            }
+                            break;
+                            
+                        case 0:
+                            System.out.println("Saliendo...");
+                            return;
+                            
+                        default:
+                            System.out.println("Opcion invalida");
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Error: " + e.getMessage());
+            } finally {
+                if (scanner != null) scanner.close();
+            }
+        } else {
+            new RucService().start();
+        }
+    }
+    
+    private static String formatearJSON(String json) {
+        return json.replace(",", ",\n  ").replace("{", "{\n  ").replace("}", "\n}");
+    }
+    
+    private boolean validarDigitoVerificador(String ruc) {
+        if (ruc == null || ruc.length() != 11) return false;
+        int[] factores = {5, 4, 3, 2, 7, 6, 5, 4, 3, 2};
+        int suma = 0;
+        for (int i = 0; i < 10; i++) {
+            suma += Character.getNumericValue(ruc.charAt(i)) * factores[i];
+        }
+        int resto = suma % 11;
+        int digitoEsperado = 11 - resto;
+        if (digitoEsperado >= 10) digitoEsperado = digitoEsperado - 10;
+        return Character.getNumericValue(ruc.charAt(10)) == digitoEsperado;
+    }
+    
+    private String determinarRegimenTributario(String ruc) {
+        String tipo = determinarTipoContribuyente(ruc);
+        if ("PERSONA_NATURAL".equals(tipo)) {
+            return "NUEVO RUS o REGIMEN ESPECIAL";
+        } else if ("PERSONA_JURIDICA".equals(tipo)) {
+            return "REGIMEN GENERAL o MYPE TRIBUTARIO";
+        }
+        return "REGIMEN GENERAL";
+    }
+    
+    private boolean puedeFacturar(Empresa empresa) {
+        return "ACTIVO".equalsIgnoreCase(empresa.getEstado()) 
+               && empresa.getDireccion() != null 
+               && !empresa.getDireccion().isEmpty();
+    }
+    
+    private String obtenerMotivoNoFactura(Empresa empresa) {
+        if (!"ACTIVO".equalsIgnoreCase(empresa.getEstado())) {
+            return "Contribuyente no activo (estado: " + empresa.getEstado() + ")";
+        }
+        if (empresa.getDireccion() == null || empresa.getDireccion().isEmpty()) {
+            return "No tiene direccion fiscal registrada";
+        }
+        return "Sin restricciones";
     }
 }

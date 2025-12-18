@@ -13,6 +13,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Scanner;
 
 public class InventarioService {
     private static final String BROKER_URL = "tcp://localhost:61616";
@@ -183,6 +184,120 @@ public class InventarioService {
     }
 
     public static void main(String[] args) {
-        new InventarioService().start();
+        InventarioService service = new InventarioService();
+        boolean modoInteractivo = args.length > 0 && args[0].equals("--interactive");
+        
+        if (modoInteractivo) {
+            Scanner scanner = null;
+            try {
+                scanner = new Scanner(System.in);
+                
+                while (true) {
+                    System.out.println("\n--- SERVICIO INVENTARIO - LOGICA DE NEGOCIO ---");
+                    System.out.println("1. Consultar inventario (stock + alertas)");
+                    System.out.println("2. Verificar si requiere reposicion");
+                    System.out.println("3. Calcular cantidad a reponer");
+                    System.out.println("4. Calcular valor del inventario");
+                    System.out.println("5. Generar alerta de stock bajo");
+                    System.out.println("0. Salir");
+                    System.out.print("Opcion: ");
+                    
+                    if (!scanner.hasNextInt()) {
+                        System.out.println("Error: Ingrese un numero");
+                        scanner.nextLine();
+                        continue;
+                    }
+                    
+                    int opcion = scanner.nextInt();
+                    scanner.nextLine();
+                    
+                    switch (opcion) {
+                        case 1:
+                            System.out.print("\nIngrese codigo producto: ");
+                            String codigo = scanner.nextLine();
+                            String resultado = service.procesarConsultaInventario(codigo);
+                            System.out.println("\nResultado:");
+                            System.out.println(formatearJSON(resultado));
+                            break;
+                            
+                        case 2:
+                            System.out.print("\nIngrese codigo producto: ");
+                            String cod2 = scanner.nextLine();
+                            Inventario inv = service.consultarInventario(cod2);
+                            if (inv != null) {
+                                boolean requiere = inv.getCantidad() <= STOCK_MINIMO;
+                                System.out.println("Producto: " + cod2);
+                                System.out.println("Stock actual: " + inv.getCantidad());
+                                System.out.println("Stock minimo: " + STOCK_MINIMO);
+                                System.out.println("Requiere reposicion: " + (requiere ? "SI" : "NO"));
+                                System.out.println("Prioridad: " + service.determinarPrioridadReposicion(inv.getCantidad()));
+                            } else {
+                                System.out.println("Producto no encontrado en inventario");
+                            }
+                            break;
+                            
+                        case 3:
+                            System.out.print("\nIngrese stock actual: ");
+                            int stockActual = scanner.nextInt();
+                            int cantidadReponer = service.calcularCantidadReposicion(stockActual);
+                            System.out.println("Stock actual: " + stockActual);
+                            System.out.println("Stock objetivo: 50");
+                            System.out.println("Cantidad a reponer: " + cantidadReponer);
+                            break;
+                            
+                        case 4:
+                            System.out.print("\nIngrese codigo producto: ");
+                            String cod4 = scanner.nextLine();
+                            Inventario inv4 = service.consultarInventario(cod4);
+                            if (inv4 != null) {
+                                double valor = service.calcularValorInventario(cod4, inv4.getCantidad());
+                                System.out.println("Producto: " + cod4);
+                                System.out.println("Cantidad: " + inv4.getCantidad());
+                                System.out.println("Valor total inventario: S/. " + Math.round(valor * 100.0) / 100.0);
+                            } else {
+                                System.out.println("Producto no encontrado");
+                            }
+                            break;
+                            
+                        case 5:
+                            System.out.print("\nIngrese codigo producto: ");
+                            String cod5 = scanner.nextLine();
+                            Inventario inv5 = service.consultarInventario(cod5);
+                            if (inv5 != null) {
+                                String estado = service.determinarEstadoInventario(inv5.getCantidad());
+                                String prioridad = service.determinarPrioridadReposicion(inv5.getCantidad());
+                                System.out.println("ALERTA DE INVENTARIO");
+                                System.out.println("Producto: " + cod5);
+                                System.out.println("Stock: " + inv5.getCantidad());
+                                System.out.println("Estado: " + estado);
+                                System.out.println("Prioridad: " + prioridad);
+                                if ("CRITICO".equals(estado) || "AGOTADO".equals(estado)) {
+                                    System.out.println("ACCION REQUERIDA: Reponer inmediatamente");
+                                }
+                            } else {
+                                System.out.println("Producto no encontrado");
+                            }
+                            break;
+                            
+                        case 0:
+                            System.out.println("Saliendo...");
+                            return;
+                            
+                        default:
+                            System.out.println("Opcion invalida");
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Error: " + e.getMessage());
+            } finally {
+                if (scanner != null) scanner.close();
+            }
+        } else {
+            new InventarioService().start();
+        }
+    }
+    
+    private static String formatearJSON(String json) {
+        return json.replace(",", ",\n  ").replace("{", "{\n  ").replace("}", "\n}");
     }
 }

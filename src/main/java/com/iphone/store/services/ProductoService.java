@@ -11,6 +11,7 @@ import org.apache.activemq.ActiveMQConnectionFactory;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.Scanner;
 
 public class ProductoService {
     private static final String BROKER_URL = "tcp://localhost:61616";
@@ -146,6 +147,120 @@ public class ProductoService {
     }
 
     public static void main(String[] args) {
-        new ProductoService().start();
+        ProductoService service = new ProductoService();
+        boolean modoInteractivo = args.length > 0 && args[0].equals("--interactive");
+        
+        if (modoInteractivo) {
+            Scanner scanner = null;
+            try {
+                scanner = new Scanner(System.in);
+                
+                while (true) {
+                    System.out.println("\n--- SERVICIO PRODUCTO - LOGICA DE NEGOCIO ---");
+                    System.out.println("1. Consultar producto (precio + disponibilidad)");
+                    System.out.println("2. Calcular precio con descuento por cantidad");
+                    System.out.println("3. Calcular precio final con IGV");
+                    System.out.println("4. Simular cotizacion completa");
+                    System.out.println("5. Verificar promociones activas");
+                    System.out.println("0. Salir");
+                    System.out.print("Opcion: ");
+                    
+                    if (!scanner.hasNextInt()) {
+                        System.out.println("Error: Ingrese un numero");
+                        scanner.nextLine();
+                        continue;
+                    }
+                    
+                    int opcion = scanner.nextInt();
+                    scanner.nextLine();
+                    
+                    switch (opcion) {
+                        case 1:
+                            System.out.print("\nIngrese codigo producto: ");
+                            String codigo = scanner.nextLine();
+                            Producto prod = service.consultarProducto(codigo);
+                            if (prod != null) {
+                                System.out.println("Codigo: " + prod.getCodigo());
+                                System.out.println("Nombre: " + prod.getNombre());
+                                System.out.println("Precio: S/. " + prod.getPrecio());
+                                System.out.println("Stock: " + prod.getStock());
+                                System.out.println("Estado Stock: " + service.determinarEstadoStock(prod.getStock()));
+                            } else {
+                                System.out.println("Producto no encontrado");
+                            }
+                            break;
+                            
+                        case 2:
+                            System.out.print("\nIngrese codigo producto: ");
+                            String cod2 = scanner.nextLine();
+                            Producto p2 = service.consultarProducto(cod2);
+                            if (p2 != null) {
+                                System.out.print("Ingrese cantidad: ");
+                                int cant = scanner.nextInt();
+                                double descPct = service.calcularDescuentoPorCantidad(cant);
+                                double precioDesc = p2.getPrecio() * (1 - descPct / 100);
+                                System.out.println("Precio unitario: S/. " + p2.getPrecio());
+                                System.out.println("Descuento aplicado: " + descPct + "%");
+                                System.out.println("Precio con descuento: S/. " + Math.round(precioDesc * 100.0) / 100.0);
+                                System.out.println("Subtotal: S/. " + Math.round(precioDesc * cant * 100.0) / 100.0);
+                            } else {
+                                System.out.println("Producto no encontrado");
+                            }
+                            break;
+                            
+                        case 3:
+                            System.out.print("\nIngrese precio base: ");
+                            double precioBase = scanner.nextDouble();
+                            double igv = precioBase * 0.18;
+                            double total = precioBase + igv;
+                            System.out.println("Precio base: S/. " + precioBase);
+                            System.out.println("IGV (18%): S/. " + Math.round(igv * 100.0) / 100.0);
+                            System.out.println("Precio final: S/. " + Math.round(total * 100.0) / 100.0);
+                            break;
+                            
+                        case 4:
+                            System.out.print("\nIngrese codigo producto: ");
+                            String cod4 = scanner.nextLine();
+                            Producto p4 = service.consultarProducto(cod4);
+                            if (p4 != null) {
+                                System.out.print("Ingrese cantidad: ");
+                                int cant4 = scanner.nextInt();
+                                String resultado = service.procesarSolicitudProducto(cod4 + "," + cant4);
+                                System.out.println("\nCotizacion completa:");
+                                System.out.println(formatearJSON(resultado));
+                            } else {
+                                System.out.println("Producto no encontrado");
+                            }
+                            break;
+                            
+                        case 5:
+                            System.out.println("\nPromociones activas:");
+                            System.out.println("- Compra 5+ unidades: 5% descuento");
+                            System.out.println("- Compra 10+ unidades: 10% descuento");
+                            System.out.println("- Compra 20+ unidades: 15% descuento");
+                            System.out.println("- Compra mayor a S/.5000: 5% adicional");
+                            System.out.println("- Compra mayor a S/.10000: 10% adicional");
+                            break;
+                            
+                        case 0:
+                            System.out.println("Saliendo...");
+                            return;
+                            
+                        default:
+                            System.out.println("Opcion invalida");
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Error: " + e.getMessage());
+            } finally {
+                if (scanner != null) scanner.close();
+            }
+        } else {
+            new ProductoService().start();
+        }
+    }
+    
+    private static String formatearJSON(String json) {
+        return json.replace(",", ",\n  ").replace("{", "{\n  ").replace("}", "\n}");
     }
 }

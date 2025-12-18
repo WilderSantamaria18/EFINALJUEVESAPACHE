@@ -11,6 +11,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.time.LocalDate;
+import java.util.Scanner;
 
 public class VentaService {
     private static final String BROKER_URL = "tcp://localhost:61616";
@@ -220,6 +221,121 @@ public class VentaService {
     }
 
     public static void main(String[] args) {
-        new VentaService().start();
+        VentaService service = new VentaService();
+        boolean modoInteractivo = args.length > 0 && args[0].equals("--interactive");
+        
+        if (modoInteractivo) {
+            Scanner scanner = null;
+            try {
+                scanner = new Scanner(System.in);
+                
+                while (true) {
+                    System.out.println("\n--- SERVICIO VENTA - LOGICA DE NEGOCIO ---");
+                    System.out.println("1. Procesar venta completa");
+                    System.out.println("2. Calcular descuento por monto");
+                    System.out.println("3. Simular cotizacion");
+                    System.out.println("4. Calcular puntos de fidelidad");
+                    System.out.println("5. Verificar historial cliente");
+                    System.out.println("0. Salir");
+                    System.out.print("Opcion: ");
+                    
+                    if (!scanner.hasNextInt()) {
+                        System.out.println("Error: Ingrese un numero");
+                        scanner.nextLine();
+                        continue;
+                    }
+                    
+                    int opcion = scanner.nextInt();
+                    scanner.nextLine();
+                    
+                    switch (opcion) {
+                        case 1:
+                            System.out.print("\nDNI Cliente: ");
+                            String dni = scanner.nextLine();
+                            System.out.print("Codigo Producto: ");
+                            String codProd = scanner.nextLine();
+                            System.out.print("Cantidad: ");
+                            int cantidad = scanner.nextInt();
+                            String resultado = service.procesarSolicitudVenta(dni + "," + codProd + "," + cantidad);
+                            System.out.println("\nResultado venta:");
+                            System.out.println(formatearJSON(resultado));
+                            break;
+                            
+                        case 2:
+                            System.out.print("\nIngrese monto total: ");
+                            double monto = scanner.nextDouble();
+                            double descuento = service.calcularDescuentoVenta(1, monto);
+                            System.out.println("Monto: S/. " + monto);
+                            System.out.println("Descuento: S/. " + Math.round(descuento * 100.0) / 100.0);
+                            System.out.println("Monto final: S/. " + Math.round((monto - descuento) * 100.0) / 100.0);
+                            System.out.println("\nReglas de descuento:");
+                            System.out.println("- Mayor a S/.10000: 10%");
+                            System.out.println("- Mayor a S/.5000: 5%");
+                            System.out.println("- 3+ productos: 3%");
+                            break;
+                            
+                        case 3:
+                            System.out.print("\nPrecio unitario: ");
+                            double precio = scanner.nextDouble();
+                            System.out.print("Cantidad: ");
+                            int cant = scanner.nextInt();
+                            double subtotal = precio * cant;
+                            double desc = service.calcularDescuentoVenta(cant, precio);
+                            double base = subtotal - desc;
+                            double igv = base * 0.18;
+                            double total = base + igv;
+                            System.out.println("\nCotizacion:");
+                            System.out.println("Subtotal: S/. " + Math.round(subtotal * 100.0) / 100.0);
+                            System.out.println("Descuento: S/. " + Math.round(desc * 100.0) / 100.0);
+                            System.out.println("Base imponible: S/. " + Math.round(base * 100.0) / 100.0);
+                            System.out.println("IGV (18%): S/. " + Math.round(igv * 100.0) / 100.0);
+                            System.out.println("TOTAL: S/. " + Math.round(total * 100.0) / 100.0);
+                            break;
+                            
+                        case 4:
+                            System.out.print("\nIngrese monto de compra: ");
+                            double montoCompra = scanner.nextDouble();
+                            int puntos = (int) (montoCompra / 10);
+                            System.out.println("Monto: S/. " + montoCompra);
+                            System.out.println("Puntos ganados: " + puntos);
+                            System.out.println("(1 punto por cada S/.10 de compra)");
+                            if (puntos >= 100) {
+                                System.out.println("Cliente VIP - Acceso a promociones exclusivas");
+                            }
+                            break;
+                            
+                        case 5:
+                            System.out.print("\nIngrese DNI cliente: ");
+                            String dniHist = scanner.nextLine();
+                            if (service.validarClienteExiste(dniHist)) {
+                                String nombre = service.obtenerNombreCliente(dniHist);
+                                System.out.println("Cliente: " + nombre);
+                                System.out.println("DNI: " + dniHist);
+                                System.out.println("Estado: REGISTRADO EN RENIEC");
+                            } else {
+                                System.out.println("Cliente no encontrado en RENIEC");
+                            }
+                            break;
+                            
+                        case 0:
+                            System.out.println("Saliendo...");
+                            return;
+                            
+                        default:
+                            System.out.println("Opcion invalida");
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Error: " + e.getMessage());
+            } finally {
+                if (scanner != null) scanner.close();
+            }
+        } else {
+            new VentaService().start();
+        }
+    }
+    
+    private static String formatearJSON(String json) {
+        return json.replace(",", ",\n  ").replace("{", "{\n  ").replace("}", "\n}");
     }
 }

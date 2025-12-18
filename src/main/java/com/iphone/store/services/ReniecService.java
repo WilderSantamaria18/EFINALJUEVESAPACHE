@@ -216,40 +216,44 @@ public class ReniecService {
     }
 
     public static void main(String[] args) {
-        Scanner scanner = new Scanner(System.in);
         ReniecService service = new ReniecService();
         boolean modoInteractivo = args.length > 0 && args[0].equals("--interactive");
 
         if (modoInteractivo) {
-            // Modo consola interactivo
-            while (true) {
-                System.out.println("\n╔══════════════════════════════════════════════════════════╗");
-                System.out.println("║          SERVICIO RENIEC - LÓGICA DE NEGOCIO            ║");
-                System.out.println("╠══════════════════════════════════════════════════════════╣");
-                System.out.println("║  1. Consultar DNI (con validaciones y categorización)   ║");
-                System.out.println("║  2. Registrar nueva persona                              ║");
-                System.out.println("║  3. Actualizar datos de persona                          ║");
-                System.out.println("║  4. Validar capacidad de compra                          ║");
-                System.out.println("║  5. Calcular descuento por edad                          ║");
-                System.out.println("║  6. Iniciar servicio JMS (modo escucha)                  ║");
-                System.out.println("║  0. Salir                                                ║");
-                System.out.println("╚══════════════════════════════════════════════════════════╝");
-                System.out.print("Seleccione opción: ");
+            Scanner scanner = null;
+            try {
+                scanner = new Scanner(System.in);
+                
+                while (true) {
+                    System.out.println("\n--- SERVICIO RENIEC - LOGICA DE NEGOCIO ---");
+                    System.out.println("1. Consultar DNI (validaciones + categorizacion)");
+                    System.out.println("2. Registrar nueva persona");
+                    System.out.println("3. Actualizar datos de persona");
+                    System.out.println("4. Validar capacidad de compra");
+                    System.out.println("5. Calcular descuento por edad");
+                    System.out.println("0. Salir");
+                    System.out.print("Opcion: ");
+                    
+                    if (!scanner.hasNextInt()) {
+                        System.out.println("Error: Ingrese un numero");
+                        scanner.nextLine();
+                        continue;
+                    }
 
-                int opcion = scanner.nextInt();
-                scanner.nextLine();
+                    int opcion = scanner.nextInt();
+                    scanner.nextLine();
 
                 switch (opcion) {
                     case 1:
-                        System.out.print("\nIngrese DNI (8 dígitos): ");
+                        System.out.print("\nIngrese DNI (8 digitos): ");
                         String dni = scanner.nextLine();
                         String resultado = service.procesarConsultaDNI(dni);
-                        System.out.println("\n✓ Resultado:");
+                        System.out.println("\nResultado:");
                         System.out.println(formatearJSON(resultado));
                         break;
 
                     case 2:
-                        System.out.println("\n=== REGISTRAR NUEVA PERSONA ===");
+                        System.out.println("\n--- REGISTRAR NUEVA PERSONA ---");
                         System.out.print("DNI: ");
                         String nuevoDni = scanner.nextLine();
                         System.out.print("Nombres: ");
@@ -260,27 +264,27 @@ public class ReniecService {
                         String apMaterno = scanner.nextLine();
                         System.out.print("Fecha Nacimiento (YYYY-MM-DD): ");
                         String fechaNac = scanner.nextLine();
-                        System.out.print("Dirección: ");
+                        System.out.print("Direccion: ");
                         String direccion = scanner.nextLine();
 
                         if (service.registrarPersona(nuevoDni, nombres, apPaterno, apMaterno, fechaNac, direccion)) {
-                            System.out.println("✓ Persona registrada exitosamente");
+                            System.out.println("Persona registrada exitosamente");
                         } else {
-                            System.out.println("✗ Error al registrar persona");
+                            System.out.println("Error al registrar persona");
                         }
                         break;
 
                     case 3:
-                        System.out.println("\n=== ACTUALIZAR DATOS ===");
+                        System.out.println("\n--- ACTUALIZAR DATOS ---");
                         System.out.print("DNI a actualizar: ");
                         String dniActualizar = scanner.nextLine();
-                        System.out.print("Nueva dirección: ");
+                        System.out.print("Nueva direccion: ");
                         String nuevaDireccion = scanner.nextLine();
 
                         if (service.actualizarDireccion(dniActualizar, nuevaDireccion)) {
-                            System.out.println("✓ Dirección actualizada exitosamente");
+                            System.out.println("Direccion actualizada exitosamente");
                         } else {
-                            System.out.println("✗ Error al actualizar dirección");
+                            System.out.println("Error al actualizar direccion");
                         }
                         break;
 
@@ -289,10 +293,10 @@ public class ReniecService {
                         int edad = scanner.nextInt();
                         boolean puedeComprar = service.validarCapacidadCompra(edad);
                         String categoria = service.determinarCategoriaCliente(edad);
-                        System.out.println("✓ Categoría: " + categoria);
-                        System.out.println("✓ Puede comprar sin restricciones: " + (puedeComprar ? "SÍ" : "NO"));
+                        System.out.println("Categoria: " + categoria);
+                        System.out.println("Puede comprar sin restricciones: " + (puedeComprar ? "SI" : "NO"));
                         if (!puedeComprar) {
-                            System.out.println("  ⚠ Requiere autorización o verificación adicional");
+                            System.out.println("  Requiere autorizacion o verificacion adicional");
                         }
                         break;
 
@@ -301,32 +305,26 @@ public class ReniecService {
                         int edadDesc = scanner.nextInt();
                         String cat = service.determinarCategoriaCliente(edadDesc);
                         double descuento = service.calcularDescuentoPorCategoria(cat);
-                        System.out.println("✓ Categoría: " + cat);
-                        System.out.println("✓ Descuento aplicable: " + (descuento * 100) + "%");
+                        System.out.println("Categoria: " + cat);
+                        System.out.println("Descuento aplicable: " + (descuento * 100) + "%");
                         break;
-
-                    case 6:
-                        System.out.println("\n▶ Iniciando servicio JMS...");
-                        service.start();
-                        System.out.println("✓ Servicio iniciado. Presione Ctrl+C para detener.");
-                        try {
-                            Thread.sleep(Long.MAX_VALUE);
-                        } catch (InterruptedException e) {
-                            System.out.println("Servicio detenido.");
-                        }
-                        return;
 
                     case 0:
                         System.out.println("Saliendo...");
-                        scanner.close();
                         return;
 
                     default:
-                        System.out.println("✗ Opción inválida");
+                        System.out.println("Opcion invalida");
+                }
+            }} catch (Exception e) {
+                System.err.println("Error en modo interactivo: " + e.getMessage());
+                e.printStackTrace();
+            } finally {
+                if (scanner != null) {
+                    scanner.close();
                 }
             }
         } else {
-            // Modo servicio JMS
             System.out.println("Iniciando RENIEC Service en modo JMS...");
             System.out.println("(Use --interactive para modo consola interactivo)");
             service.start();
@@ -338,10 +336,9 @@ public class ReniecService {
         }
     }
 
-    // Métodos CRUD con lógica de negocio
     private boolean registrarPersona(String dni, String nombres, String apPaterno, String apMaterno, String fechaNac, String direccion) {
         if (!validarFormatoDNI(dni) || !validarRangoDNI(dni)) {
-            System.out.println("✗ DNI inválido");
+            System.out.println("DNI invalido");
             return false;
         }
 

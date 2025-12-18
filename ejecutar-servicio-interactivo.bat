@@ -1,8 +1,14 @@
 @echo off
 cd /d "%~dp0"
 
+REM Verificar si ya esta compilado
+if exist "target\classes\com\iphone\store\Main.class" (
+    echo Proyecto ya compilado. Saltando compilacion...
+    goto :setupClasspath
+)
+
 echo Compilando el proyecto...
-call mvn clean compile -DskipTests -q
+call mvn compile -DskipTests -q
 
 if errorlevel 1 (
     echo Error al compilar el proyecto
@@ -10,7 +16,17 @@ if errorlevel 1 (
     exit /b 1
 )
 
+:setupClasspath
+
+:setupClasspath
 set CLASSPATH=target\classes
+
+REM Copiar dependencias si no existen
+if not exist "target\lib" (
+    echo Copiando dependencias...
+    call mvn dependency:copy-dependencies -DoutputDirectory=target\lib -q
+)
+
 for %%i in (target\lib\*.jar) do call :addToClasspath %%i
 goto :afterClasspath
 
@@ -52,7 +68,13 @@ goto menu
 
 :reniec
 cls
-java -cp "%CLASSPATH%" com.iphone.store.services.ReniecService --interactive
+echo.
+echo ========================================
+echo    RENIEC SERVICE - Modo Interactivo
+echo ========================================
+echo.
+java -cp "%CLASSPATH%" com.iphone.store.services.ReniecService --interactive < CON
+echo.
 pause
 goto menu
 
