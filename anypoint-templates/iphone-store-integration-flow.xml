@@ -52,7 +52,7 @@ payload.cantidad]]></ee:set-variable>
 				<jms:body><![CDATA[#[vars.dni]]]></jms:body>
 			</jms:message>
 		</jms:publish>
-		<jms:consume doc:name="Leer RENIEC.RESPONSE" config-ref="JMS_Config" destination="RENIEC.RESPONSE" timeout="5000"/>
+		<jms:consume doc:name="Leer RENIEC.RESPONSE" config-ref="JMS_Config" destination="RENIEC.RESPONSE" maximumWait="5000"/>
 		
 		<ee:transform doc:name="Parsear RENIEC">
 			<ee:variables>
@@ -73,7 +73,7 @@ read(payload as String, "application/json")]]></ee:set-variable>
 						<jms:body><![CDATA[#[vars.codigo ++ "," ++ vars.cantidad]]]></jms:body>
 					</jms:message>
 				</jms:publish>
-				<jms:consume doc:name="Leer PRODUCTO.RESPONSE" config-ref="JMS_Config" destination="PRODUCTO.RESPONSE" timeout="5000"/>
+				<jms:consume doc:name="Leer PRODUCTO.RESPONSE" config-ref="JMS_Config" destination="PRODUCTO.RESPONSE" maximumWait="5000"/>
 				
 				<ee:transform doc:name="Parsear PRODUCTO">
 					<ee:variables>
@@ -94,7 +94,7 @@ read(payload as String, "application/json")]]></ee:set-variable>
 								<jms:body><![CDATA[#[vars.codigo]]]></jms:body>
 							</jms:message>
 						</jms:publish>
-						<jms:consume doc:name="Leer INVENTARIO.RESPONSE" config-ref="JMS_Config" destination="INVENTARIO.RESPONSE" timeout="5000"/>
+						<jms:consume doc:name="Leer INVENTARIO.RESPONSE" config-ref="JMS_Config" destination="INVENTARIO.RESPONSE" maximumWait="5000"/>
 						
 						<ee:transform doc:name="Parsear INVENTARIO">
 							<ee:variables>
@@ -111,7 +111,7 @@ read(payload as String, "application/json")]]></ee:set-variable>
 								<jms:body><![CDATA[#[vars.dni ++ "," ++ vars.codigo ++ "," ++ vars.cantidad]]]></jms:body>
 							</jms:message>
 						</jms:publish>
-						<jms:consume doc:name="Leer VENTA.RESPONSE" config-ref="JMS_Config" destination="VENTA.RESPONSE" timeout="5000"/>
+						<jms:consume doc:name="Leer VENTA.RESPONSE" config-ref="JMS_Config" destination="VENTA.RESPONSE" maximumWait="5000"/>
 						
 						<ee:transform doc:name="Parsear VENTA">
 							<ee:variables>
