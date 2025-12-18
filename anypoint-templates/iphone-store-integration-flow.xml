@@ -1,23 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+<mule xmlns:jms="http://www.mulesoft.org/schema/mule/jms"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
 	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
 	xmlns="http://www.mulesoft.org/schema/mule/core"
 	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
-http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd">
 	
 	<!-- HTTP Listener Configuration -->
 	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config">
 		<http:listener-connection host="0.0.0.0" port="8091" />
 	</http:listener-config>
 	
-	<!-- HTTP Request Configuration para servicios -->
-	<http:request-config name="HTTP_Request_Services" doc:name="HTTP Request configuration">
-		<http:request-connection host="localhost" port="8081" />
-	</http:request-config>
+	<!-- JMS Configuration (ActiveMQ) -->
+	<jms:config name="JMS_Config" doc:name="JMS Config">
+		<jms:active-mq-connection>
+			<jms:factory-configuration brokerUrl="tcp://localhost:61616" />
+		</jms:active-mq-connection>
+	</jms:config>
 	
 	<!-- FLUJO PRINCIPAL: Venta Completa -->
 	<flow name="venta-completa-flow">
@@ -66,7 +70,7 @@ payload.exito]]></ee:set-variable>
 		<choice doc:name="¿Cliente válido?">
 			<when expression="#[vars.clienteValido == true]">
 				<!-- 5. Consultar producto -->
-				<http:request method="POST" doc:name="Consultar Producto" config-ref="HTTP_Request_Services" path="/producto/consultar" port="8082">
+				<http:request method="POST" doc:name="Consultar Producto" url="http://localhost:8082/producto/consultar">
 					<http:body><![CDATA[#[output application/json --- {"codigo": vars.codigoProducto}]]]></http:body>
 				</http:request>
 				
@@ -84,7 +88,7 @@ payload.nombre]]></ee:set-variable>
 				</ee:transform>
 				
 				<!-- 6. Verificar inventario -->
-				<http:request method="POST" doc:name="Verificar Inventario" config-ref="HTTP_Request_Services" path="/inventario/verificar" port="8083">
+				<http:request method="POST" doc:name="Verificar Inventario" url="http://localhost:8083/inventario/verificar">
 					<http:body><![CDATA[#[output application/json --- {"codigoProducto": vars.codigoProducto, "cantidad": vars.cantidad}]]]></http:body>
 				</http:request>
 				
@@ -119,7 +123,7 @@ output application/java
 						</ee:transform>
 						
 						<!-- 9. Registrar venta -->
-						<http:request method="POST" doc:name="Registrar Venta" config-ref="HTTP_Request_Services" path="/venta/registrar" port="8084">
+						<http:request method="POST" doc:name="Registrar Venta" url="http://localhost:8084/venta/registrar">
 							<http:body><![CDATA[#[output application/json --- {
 								"dniCliente": vars.dniCliente,
 								"codigoProducto": vars.codigoProducto,
@@ -140,7 +144,7 @@ payload.id]]></ee:set-variable>
 						</ee:transform>
 						
 						<!-- 10. Actualizar inventario -->
-						<http:request method="POST" doc:name="Actualizar Inventario" config-ref="HTTP_Request_Services" path="/inventario/actualizar" port="8083">
+						<http:request method="POST" doc:name="Actualizar Inventario" url="http://localhost:8083/inventario/actualizar">
 							<http:body><![CDATA[#[output application/json --- {
 								"codigoProducto": vars.codigoProducto,
 								"cantidad": vars.cantidad
@@ -148,7 +152,7 @@ payload.id]]></ee:set-variable>
 						</http:request>
 						
 						<!-- 11. Registrar empleado (comisión) -->
-						<http:request method="POST" doc:name="Registrar Comision" config-ref="HTTP_Request_Services" path="/empleado/comision" port="8085">
+						<http:request method="POST" doc:name="Registrar Comision" url="http://localhost:8085/empleado/comision">
 							<http:body><![CDATA[#[output application/json --- {
 								"ventaId": vars.ventaId,
 								"monto": vars.total * 0.05
@@ -222,7 +226,8 @@ output application/json
 {
 	exito: false,
 	error: "ERROR_INTERNO",
-	mensaje: "Ocurrió un error al procesar la venta: " ++ error.description
+	mensaje: "Ocurrio un error al procesar la venta",
+	detalle: (error.description default "SIN_DETALLE")
 }]]></ee:set-payload>
 					</ee:message>
 				</ee:transform>
