@@ -22,17 +22,18 @@ goto :eof
 
 :menu
 cls
-echo ╔════════════════════════════════════════════════════════════════╗
-echo ║     EJECUTAR SERVICIOS CON LOGICA DE NEGOCIO (MODO CONSOLA)   ║
-echo ╠════════════════════════════════════════════════════════════════╣
-echo ║  1. RENIEC Service     - Validacion DNI con logica            ║
-echo ║  2. RUC Service        - Validacion RUC con algoritmo         ║
-echo ║  3. Producto Service   - Precios, descuentos, promociones     ║
-echo ║  4. Inventario Service - Gestion stock, alertas, reservas     ║
-echo ║  5. Venta Service      - Calculo totales, descuentos, puntos  ║
-echo ║  6. Empleado Service   - Comisiones, metas, bonificaciones    ║
-echo ║  7. TODOS (modo JMS)   - Iniciar todos los servicios          ║
-echo ║  0. Salir                                                      ║
+echo ================================================================
+echo      EJECUTAR SERVICIOS CON LOGICA DE NEGOCIO (MODO CONSOLA)
+echo ================================================================
+echo   1. RENIEC Service     - Validacion DNI con logica
+echo   2. RUC Service        - Validacion RUC con algoritmo
+echo   3. Producto Service   - Precios, descuentos, promociones
+echo   4. Inventario Service - Gestion stock, alertas, reservas
+echo   5. Venta Service      - Calculo totales, descuentos, puntos
+echo   6. Empleado Service   - Comisiones, metas, bonificaciones
+echo   7. TODOS (modo JMS)   - Iniciar todos los servicios
+echo   0. Salir
+echo ================================================================
 echo ╚════════════════════════════════════════════════════════════════╝
 echo.
 set /p opcion="Seleccione opcion: "
